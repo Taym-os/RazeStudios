@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dollar Earnings Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#0b1020;color:#f5f7ff;min-height:100vh}
+.container{max-width:1100px;margin:auto;padding:28px 18px 45px}
+header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:22px}
+h1{margin:0;font-size:30px}.sub{color:#9da7bd;margin-top:6px}.actions{display:flex;gap:8px;flex-wrap:wrap}
+button,select{border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;background:#5865f2;color:white}
+button.secondary,select{background:#202a43}button.danger{background:#d83a56}
+select{border:1px solid #34415f;outline:none}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}.card{background:#121a2d;border:1px solid #202b45;border-radius:16px;padding:18px}
+.card span{display:block;color:#9da7bd;font-size:13px;margin-bottom:7px}.card strong{font-size:25px}
+.panel{background:#121a2d;border:1px solid #202b45;border-radius:16px;padding:18px;margin-bottom:18px}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px;flex-wrap:wrap}.panel h2{font-size:18px;margin:0}
+.inputs{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}.day{background:#0d1425;border:1px solid #26324e;border-radius:12px;padding:10px}
+.day label{display:block;color:#aeb7ca;font-size:12px;margin-bottom:6px}.day input{width:100%;padding:10px;border-radius:8px;border:1px solid #34415f;background:#151f35;color:white;outline:none;font-size:15px}
+.day input:focus{border-color:#6875ff}.chartbox{height:390px}.note{color:#8e99ae;font-size:12px;margin-top:10px}
+.saved{color:#73e6a8;font-size:13px;min-height:18px}
+@media(max-width:800px){.inputs{grid-template-columns:repeat(3,1fr)}}@media(max-width:550px){header{align-items:flex-start;flex-direction:column}.cards{grid-template-columns:1fr}.inputs{grid-template-columns:repeat(2,1fr)}.chartbox{height:300px}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<div><h1>💵 Dollar Earnings Tracker</h1><div class="sub">Track your earnings from September through December 2026 in USD.</div></div>
+<div class="actions">
+<button onclick="saveData()">💾 Save</button>
+<button class="secondary" onclick="exportSQL()">🗄️ Export SQL</button>
+<button class="danger" onclick="clearMonth()">Clear Month</button>
+</div>
+</header>
+
+<div class="panel">
+<div class="toolbar">
+<h2>Select Month</h2>
+<div class="actions">
+<select id="monthSelect"></select>
+
+</div>
+</div>
+<div class="saved" id="saved"></div>
+
+</div>
+
+<div class="cards">
+<div class="card"><span>Total Earned</span><strong id="total">$0.00</strong></div>
+<div class="card"><span>Daily Average</span><strong id="average">$0.00</strong></div>
+<div class="card"><span>Best Day</span><strong id="best">—</strong></div>
+</div>
+
+<div class="panel">
+<div class="toolbar"><h2 id="monthTitle">Daily Earnings</h2></div>
+<div class="inputs" id="inputs"></div>
+<div class="note" id="inputNote">Enter your earnings in USD. Data is saved locally in your browser.</div>
+</div>
+
+<div class="panel">
+<h2>Earnings Chart</h2>
+<div class="chartbox"><canvas id="chart"></canvas></div>
+</div>
+</div>
+
+<script>
+const months=[
+ {n:8,name:"September",days:30},
+ {n:9,name:"October",days:31},
+ {n:10,name:"November",days:30},
+ {n:11,name:"December",days:31}
+];
+const key="usd-earnings-2026";
+let allData=JSON.parse(localStorage.getItem(key)||"{}");
+let currentMonth=8;
+
+const monthSelect=document.getElementById("monthSelect");
+months.forEach(m=>{
+ const o=document.createElement("option");o.value=m.n;o.textContent=m.name+" 2026";monthSelect.appendChild(o);
+});
+monthSelect.value=currentMonth;
+
+const chart=new Chart(document.getElementById("chart"),{
+ type:"line",
+ data:{labels:[],datasets:[{label:"Money Earned",data:[],borderColor:"#6d78ff",backgroundColor:"rgba(109,120,255,.16)",fill:true,tension:.3,pointRadius:4,pointHoverRadius:6}]},
+ options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:"index"},
+ scales:{x:{grid:{color:"rgba(255,255,255,.05)"},ticks:{color:"#9da7bd"}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,.05)"},ticks:{color:"#9da7bd",callback:v=>"$"+v}}},
+ plugins:{legend:{labels:{color:"#dce2f0"}},tooltip:{callbacks:{label:ctx=>"$"+Number(ctx.parsed.y).toFixed(2)}}}}
+});
+
+function render(){
+ currentMonth=Number(monthSelect.value);
+ const month=months.find(m=>m.n===currentMonth);
+ const vals=allData[currentMonth]||{};
+ document.getElementById("monthTitle").textContent=month.name+" 2026 — Daily Earnings";
+ const box=document.getElementById("inputs");box.innerHTML="";
+ for(let d=1;d<=month.days;d++){
+  const wrap=document.createElement("div");wrap.className="day";
+  wrap.innerHTML=`<label>${month.name} ${d}</label><input type="number" min="0" step="0.01" placeholder="0.00" value="${vals[d]??""}" data-day="${d}">`;
+  box.appendChild(wrap);
+ }
+ document.querySelectorAll("input[data-day]").forEach(i=>i.addEventListener("input",update));
+ update();
+ document.getElementById("saved").textContent="";
+}
+function update(){
+ const month=months.find(m=>m.n===currentMonth);
+ if(!allData[currentMonth]) allData[currentMonth]={};
+ const nums=[];
+ document.querySelectorAll("input[data-day]").forEach(i=>{
+  const entered=parseFloat(i.value);
+  const jod=isNaN(entered)?0:(currency==="USD"?entered*rate:entered);
+  allData[currentMonth][i.dataset.day]=jod;
+  nums.push(jod);
+ });
+ chart.data.labels=nums.map((_,i)=>`${month.name.slice(0,3)} ${i+1}`);
+ chart.data.datasets[0].data=nums;chart.update();
+ const total=nums.reduce((a,b)=>a+b,0), entered=nums.filter(x=>x>0);
+ const avg=entered.length?total/entered.length:0,max=Math.max(...nums),best=max>0?`${month.name.slice(0,3)} ${nums.indexOf(max)+1}`:"—";
+ document.getElementById("total").textContent="$"+total.toFixed(2);
+ document.getElementById("average").textContent="$"+avg.toFixed(2);
+ document.getElementById("best").textContent=best;
+ document.getElementById("inputNote").textContent =
+   "Enter your earnings in USD. Data is saved locally in your browser.";
+}
+function saveData(){
+ localStorage.setItem(key,JSON.stringify(allData));
+ document.getElementById("saved").textContent="✓ Saved successfully";
+ setTimeout(()=>document.getElementById("saved").textContent="",2000);
+}
+function clearMonth(){
+ if(confirm("Clear all earnings for "+months.find(m=>m.n===currentMonth).name+" 2026?")){
+  allData[currentMonth]={};localStorage.setItem(key,JSON.stringify(allData));render();
+ }
+}
+function exportSQL(){
+ let sql="CREATE TABLE IF NOT EXISTS earnings (id INTEGER PRIMARY KEY, year INTEGER NOT NULL, month INTEGER NOT NULL, day INTEGER NOT NULL, amount_usd DECIMAL(12,2) NOT NULL, UNIQUE(year,month,day));\n\n";
+ let id=1;
+ months.forEach(m=>{
+  const vals=allData[m.n]||{};
+  for(let d=1;d<=m.days;d++){
+   const amount=Number(vals[d]||0).toFixed(2);
+   sql+=`INSERT OR REPLACE INTO earnings (id, year, month, day, amount_usd) VALUES (${id++}, 2026, ${m.n+1}, ${d}, ${amount});\n`;
+  }
+ });
+ const blob=new Blob([sql],{type:"application/sql"});
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="earnings_2026_usd.sql";a.click();
+}
+monthSelect.addEventListener("change",()=>{saveData();render()});
+render();
+</script>
+</body>
+</html>
